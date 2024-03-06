@@ -97,6 +97,10 @@ impl From<actix_web_actors::ws::Message> for Message {
         match msg {
             actix_web_actors::ws::Message::Text(text) => Message::Text(text.to_string()),
             actix_web_actors::ws::Message::Binary(bin) => Message::Binary(bin.to_vec()),
+            actix_web_actors::ws::Message::Close(reason) => {
+                log::info!("Closing websocket: {:?}", reason);
+                Message::Text("Disconnect".to_string())
+            }
             alternative => {
                 log::error!("Unsupported message type: {:?}", alternative);
                 panic!("Unsupported message type: {:?}", alternative);

@@ -95,21 +95,13 @@ impl Worker for WebsocketWorker {
 
     fn connected(
         &mut self,
-        scope: &yew_agent::prelude::WorkerScope<Self>,
+        _scope: &yew_agent::prelude::WorkerScope<Self>,
         id: yew_agent::worker::HandlerId,
     ) {
-        // Chweck if the subscriber is connected
-        if self.subscribers.contains(&id) {
-            log::debug!("Subscriber already connected: {:?}", id);
-            return;
-        }
-
-        log::debug!("Connected to subscriber: {:?}", id);
         self.subscribers.insert(id);
     }
 
-    fn disconnected(&mut self, scope: &yew_agent::prelude::WorkerScope<Self>, id: HandlerId) {
-        log::debug!("Disconnected from subscriber: {:?}", id);
+    fn disconnected(&mut self, _scope: &yew_agent::prelude::WorkerScope<Self>, id: HandlerId) {
         self.subscribers.remove(&id);
     }
 

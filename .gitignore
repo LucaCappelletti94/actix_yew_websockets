@@ -14,3 +14,5 @@ Cargo.lock
 *.pdb
 
 frontent/dist/*
+
+.DS_Store
