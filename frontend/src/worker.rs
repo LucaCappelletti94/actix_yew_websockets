@@ -114,9 +114,8 @@ impl Worker for WebsocketWorker {
     }
 
     fn disconnected(&mut self, scope: &yew_agent::prelude::WorkerScope<Self>, id: HandlerId) {
-        
-        // log::debug!("Disconnected from subscriber: {:?}", id);
-        // self.subscribers.remove(&id);
+        log::debug!("Disconnected from subscriber: {:?}", id);
+        self.subscribers.remove(&id);
     }
 
     fn destroy(
@@ -134,7 +133,6 @@ impl Worker for WebsocketWorker {
         frontend_message: Self::Input,
         id: HandlerId,
     ) {
-        self.connected(scope, id);
         if let Some(sender) = &mut self.sender {
             log::debug!("Sending message to websocket: {:?}", frontend_message);
             match sender.try_send(frontend_message) {
