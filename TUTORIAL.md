@@ -150,3 +150,17 @@ touch commons/src/messages.rs
 ```rust
 TODO!
 ```
+
+## Starting the backend
+In order to start the backend while making it automatically recompile upon changes, you can run the following command in the `backend` directory:
+
+```bash
+cargo watch -x run
+```
+
+## Starting the frontend
+In order to start the frontend while making it automatically recompile upon changes, you can run the following command in the `frontend` directory:
+
+```bash
+trunk serve --port 3000 --proxy-backend http://localhost:8080/ws
+```
