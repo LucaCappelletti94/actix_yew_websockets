@@ -1,5 +1,5 @@
 //! Module providing the websocket messages used in the application.
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Message {
@@ -11,45 +11,36 @@ pub enum Message {
 pub enum FrontendMessage {
     Connect,
     Disconnect(Option<u16>),
-    Marco,
-    Euler
+    StartCounter,
+    StopCounter,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum BackendMessage {
-    Polo,
-    Gauss
+    CurrentCount(u32),
+    StoppedCounter,
 }
 
 impl From<BackendMessage> for Message {
     fn from(msg: BackendMessage) -> Self {
-        match msg {
-            BackendMessage::Polo => {
-                Message::Text("Polo".to_string())
-            },
-            BackendMessage::Gauss => {
-                Message::Text("Gauss".to_string())
-            }
-        }
+        Message::Text(serde_json::to_string(&msg).expect("Failed to serialize message"))
     }
 }
 
 impl From<Message> for BackendMessage {
     fn from(msg: Message) -> Self {
+        log::info!("Converting message to backend message: {:?}", msg);
         match msg {
-            Message::Text(text) => {
-                match text.as_str() {
-                    "Polo" => BackendMessage::Polo,
-                    "Gauss" => BackendMessage::Gauss,
-                    _ => {
-                        panic!("Unsupported message: {:?}", text)
-                    }
+            Message::Text(text) => match serde_json::from_str(&text) {
+                Ok(backend_message) => backend_message,
+                Err(err) => {
+                    log::error!("Failed to deserialize message: {:?}", err);
+                    panic!("Failed to deserialize message: {:?}", err);
                 }
-            }
+            },
             Message::Binary(_bin) => {
-                unimplemented!(
-                    "Converting a binary message to an BackendMessage is not supported"
-                );
+                log::error!("Converting a binary message to an BackendMessage is not supported");
+                unimplemented!("Converting a binary message to an BackendMessage is not supported");
             }
         }
     }
@@ -57,39 +48,42 @@ impl From<Message> for BackendMessage {
 
 impl From<FrontendMessage> for Message {
     fn from(msg: FrontendMessage) -> Self {
-        match msg {
-            FrontendMessage::Marco => {
-                Message::Text("Marco".to_string())
-            }
-            FrontendMessage::Euler => {
-                Message::Text("Euler".to_string())
-            }
-            FrontendMessage::Connect => {
-                unimplemented!("Converting a connect message to a Message is not supported");
-            }
-            FrontendMessage::Disconnect(_code) => {
-                unimplemented!("Converting a disconnect message to a Message is not supported");
-            }
-        }
+        Message::Text(serde_json::to_string(&msg).expect("Failed to serialize message"))
     }
 }
 
 impl From<Message> for FrontendMessage {
     fn from(msg: Message) -> Self {
         match msg {
-            Message::Text(text) => {
-                match text.as_str() {
-                    "Marco" => FrontendMessage::Marco,
-                    "Euler" => FrontendMessage::Euler,
-                    _ => {
-                        panic!("Unsupported message: {:?}", text)
-                    }
+            Message::Text(text) => match serde_json::from_str(&text) {
+                Ok(frontend_message) => frontend_message,
+                Err(err) => {
+                    log::error!("Failed to deserialize message: {:?}", err);
+                    panic!("Failed to deserialize message: {:?}", err);
                 }
-            }
+            },
             Message::Binary(_bin) => {
+                log::error!("Converting a binary message to an FrontendMessage is not supported");
                 unimplemented!(
                     "Converting a binary message to an FrontendMessage is not supported"
                 );
+            }
+        }
+    }
+}
+
+/// When the feature `backend` is enabled, we implement the From trait for the
+/// ByteString enum.
+#[cfg(feature = "backend")]
+impl Into<bytestring::ByteString> for BackendMessage {
+    fn into(self) -> bytestring::ByteString {
+        match self.into() {
+            Message::Text(text) => {
+                text.into()
+            },
+            Message::Binary(_bin) => {
+                log::error!("Converting a binary message to a ByteString is not supported");
+                panic!("Converting a binary message to a ByteString is not supported")
             }
         }
     }
@@ -103,7 +97,10 @@ impl From<actix_web_actors::ws::Message> for Message {
         match msg {
             actix_web_actors::ws::Message::Text(text) => Message::Text(text.to_string()),
             actix_web_actors::ws::Message::Binary(bin) => Message::Binary(bin.to_vec()),
-            alternative => panic!("Unsupported message type: {:?}", alternative),
+            alternative => {
+                log::error!("Unsupported message type: {:?}", alternative);
+                panic!("Unsupported message type: {:?}", alternative);
+            }
         }
     }
 }
@@ -139,6 +136,7 @@ impl From<gloo_net::websocket::Message> for Message {
 #[cfg(feature = "frontend")]
 impl From<gloo_net::websocket::Message> for BackendMessage {
     fn from(msg: gloo_net::websocket::Message) -> Self {
+        log::info!("Converting message to backend message: {:?}", msg);
         let message: Message = msg.into();
         message.into()
     }

@@ -1,15 +1,11 @@
 use commons::messages::{BackendMessage, FrontendMessage};
-use futures::{Future, SinkExt, StreamExt};
+use futures::{SinkExt, StreamExt};
 use gloo_net::websocket::futures::WebSocket;
-use core::panic;
 use std::collections::HashSet;
 use wasm_bindgen::UnwrapThrowExt;
 use yew::platform::spawn_local;
-use yew_agent::worker::{HandlerId, WorkerScope};
-use yew_agent::{
-    reactor::{reactor, Reactor, ReactorScope},
-    worker::Worker,
-};
+use yew_agent::worker::HandlerId;
+use yew_agent::worker::Worker;
 
 const NOMINAL_CLOSURE_CODE: u16 = 1000;
 
@@ -37,7 +33,6 @@ impl Worker for WebsocketWorker {
 
         spawn_local(async move {
             while let Some(frontend_message) = receiver.next().await {
-                log::debug!("got event from channel! {:?}", frontend_message);
                 write.send(frontend_message.into()).await.unwrap();
             }
         });

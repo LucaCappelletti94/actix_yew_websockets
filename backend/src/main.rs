@@ -13,7 +13,7 @@ mod ws;
 
 #[get("/ws")]
 async fn start_websocket(req: HttpRequest, stream: web::Payload) -> Result<HttpResponse, Error> {
-    actix_web_actors::ws::start(ws::WebSocket, &req, stream)
+    actix_web_actors::ws::start(ws::WebSocket::default(), &req, stream)
 }
 
 #[actix_web::main]
@@ -48,5 +48,7 @@ async fn main() -> std::io::Result<()> {
     .workers(2)
     .bind(("localhost", 8080))?
     .run()
-    .await
+    .await?;
+
+    Ok(())
 }
