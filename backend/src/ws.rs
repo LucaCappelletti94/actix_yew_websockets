@@ -2,16 +2,26 @@
 use actix::ActorContext;
 use actix::AsyncContext;
 use actix::SpawnHandle;
+use actix::WrapFuture;
 use actix::{Actor, StreamHandler};
 use actix_web_actors::ws;
 use commons::messages::{BackendMessage, FrontendMessage};
 use std::time::Duration;
 
-#[derive(Default)]
+use crate::Conn;
+
 pub struct WebSocket {
-    counter: u32,
-    counting: bool,
-    counting_handler: Option<SpawnHandle>,
+    pg_handlers: Vec<SpawnHandle>,
+    conn: Conn,
+}
+
+impl WebSocket {
+    pub fn new(conn: Conn) -> Self {
+        Self {
+            pg_handlers: vec![],
+            conn,
+        }
+    }
 }
 
 impl Actor for WebSocket {
@@ -25,33 +35,63 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WebSocket {
                 log::info!("Got message from WebSocket: {:?}", msg);
                 let frontend_message: FrontendMessage = msg.into();
                 match frontend_message {
-                    FrontendMessage::StartCounter => {
-                        log::info!("Starting counter");
-                        self.counting = true;
-                        self.counting_handler =
-                            Some(ctx.run_interval(Duration::from_secs(1), |act, ctx| {
-                                // check client heartbeats
-                                if !act.counting {
-                                    // don't try to send a ping
-                                    log::info!("Stopping counter");
-                                    return;
-                                }
+                    FrontendMessage::Login(username) => {
+                        // We insert the user into the database
+                        let new_user = crate::models::NewUser {
+                            username: username.clone(),
+                        };
 
-                                act.counter += 1;
+                        match new_user.insert(&mut self.conn) {
+                            Ok(user) => {
+                                ctx.binary(BackendMessage::LoggedIn(user.into()));
+                            }
+                            Err(err) => {
+                                log::error!("Error inserting user: {:?}", err);
+                            }
+                        }
 
-                                ctx.binary(BackendMessage::CurrentCount(act.counter))
-                            }));
+                        self.pg_handlers
+                            .push(ctx.spawn(async move {
+                                // We check whether there are any news from
+                                // the postgres channel "comment_added"
+                                
+                                todo!("Check for new comments");
+
+                            }.into_actor(self)));
                     }
-                    FrontendMessage::StopCounter => {
-                        self.counting = false;
-                        self.counting_handler.take().map(|h| ctx.cancel_future(h));
-                        ctx.binary(BackendMessage::StoppedCounter);
+                    FrontendMessage::InsertComment((user, comment_text)) => {
+                        let new_comment = crate::models::NewComment {
+                            user_id: user.id,
+                            body: comment_text,
+                        };
+
+                        match new_comment.insert(&mut self.conn) {
+                            Ok(comment) => {
+                                ctx.binary(BackendMessage::NewComment(comment.into()));
+                            }
+                            Err(err) => {
+                                log::error!("Error inserting comment: {:?}", err);
+                            }
+                        }
                     }
-                    FrontendMessage::Connect => {
-                        unreachable!("Connect message should not be sent from the frontend");
+                    FrontendMessage::DeleteComment(comment) => {
+                        let comment: crate::models::Comment = comment.into();
+                        match comment.delete(&mut self.conn) {
+                            Ok(_) => {
+                                // We could trigger the event here,
+                                // but we want to handle it separately in the
+                                // pg_notify handler
+                            }
+                            Err(err) => {
+                                log::error!("Error deleting comment: {:?}", err);
+                            }
+                        }
                     }
                     FrontendMessage::Close(code) => {
                         ctx.stop();
+                    }
+                    _ => {
+                        log::error!("Unhandled message: {:?}", frontend_message);
                     }
                 }
             }

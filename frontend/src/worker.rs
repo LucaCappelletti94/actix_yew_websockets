@@ -1,4 +1,3 @@
-use commons::messages::{BackendMessage, FrontendMessage};
 use futures::{SinkExt, StreamExt};
 use gloo_net::websocket::futures::WebSocket;
 use std::collections::HashSet;
@@ -9,27 +8,33 @@ use yew_agent::worker::Worker;
 
 const NOMINAL_CLOSURE_CODE: u16 = 1000;
 
-pub struct WebsocketWorker {
+#[derive(Debug, Clone)]
+pub struct WebsocketWorker<FM, BM> {
     subscribers: HashSet<HandlerId>,
-    sender: Option<futures::channel::mpsc::Sender<FrontendMessage>>,
+    sender: Option<futures::channel::mpsc::Sender<FM>>,
+    _phantom: std::marker::PhantomData<BM>,
 }
 
 #[derive(Clone, Debug)]
-pub enum InternalMessage {
-    Backend(BackendMessage),
+pub enum InternalMessage<BM> {
+    Backend(BM),
     Disconnect(Option<u16>),
 }
 
-impl Worker for WebsocketWorker {
-    type Message = InternalMessage;
-    type Input = FrontendMessage;
-    type Output = BackendMessage;
+impl<FM, BM> Worker for WebsocketWorker<FM, BM>
+where
+    FM: Into<gloo_net::websocket::Message> + Clone + 'static,
+    BM: From<gloo_net::websocket::Message> + Clone + 'static,
+{
+    type Message = InternalMessage<BM>;
+    type Input = FM;
+    type Output = BM;
 
     fn create(scope: &yew_agent::prelude::WorkerScope<Self>) -> Self {
         let websocket = WebSocket::open("ws://localhost:8080/ws").unwrap_throw();
         let (mut write, mut read) = websocket.split();
 
-        let (sender, mut receiver) = futures::channel::mpsc::channel::<FrontendMessage>(1000);
+        let (sender, mut receiver) = futures::channel::mpsc::channel::<FM>(1000);
 
         spawn_local(async move {
             while let Some(frontend_message) = receiver.next().await {
@@ -57,6 +62,7 @@ impl Worker for WebsocketWorker {
         Self {
             subscribers: HashSet::new(),
             sender: Some(sender),
+            _phantom: std::marker::PhantomData,
         }
     }
 

@@ -1,6 +1,8 @@
 //! Module providing the websocket messages used in the application.
 use serde::{Deserialize, Serialize};
 
+use crate::prelude::{Comment, User};
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CloseReason {
     code: u16,
@@ -9,16 +11,19 @@ pub struct CloseReason {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum FrontendMessage {
-    Connect,
     Close(Option<CloseReason>),
-    StartCounter,
-    StopCounter,
+    Login(String),
+    InsertComment((User, String)),
+    DeleteComment(Comment)
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum BackendMessage {
-    CurrentCount(u32),
-    StoppedCounter,
+    LoggedIn(User),
+    NewComment(Comment),
+    InsertedComment(Comment),
+    Comments(Vec<Comment>),
+    DeletedComment(Comment),
 }
 
 #[cfg(feature = "backend")]

@@ -10,5 +10,7 @@ actix-files = "0.6.5"
 actix-web = "4.5.1"
 actix-web-actors = "4.3.0"
 commons = { path = "../commons", features = ["backend"] }
+diesel = {version="2.1.4", features = ["postgres", "r2d2", "chrono", "uuid"] }
+dotenvy = "0.15.7"
 env_logger = "0.11.2"
 log = "0.4.21"

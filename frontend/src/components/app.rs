@@ -1,16 +1,20 @@
-use crate::components::counter::*;
+use crate::router::{switch, AppRoute};
 use crate::worker::*;
+use commons::messages::{BackendMessage, FrontendMessage};
 use yew::prelude::*;
 use yew_agent::worker::WorkerProvider;
+use yew_router::prelude::*;
 
 #[function_component]
 #[allow(non_snake_case)]
 pub fn App() -> Html {
     html! {
-        <div class="app">
-            <WorkerProvider<WebsocketWorker> path="web_socket_worker.js">
-                <Counter />
-            </WorkerProvider<WebsocketWorker>>
-        </div>
+        <BrowserRouter>
+            <div class="app">
+                <WorkerProvider<WebsocketWorker<FrontendMessage, BackendMessage>> path="web_socket_worker.js">
+                <Switch<AppRoute> render={switch} />
+            </WorkerProvider<WebsocketWorker<FrontendMessage, BackendMessage>>>
+            </div>
+        </BrowserRouter>
     }
 }
