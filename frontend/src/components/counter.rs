@@ -35,7 +35,6 @@ impl Component for Counter {
         let on_output = {
             let link = ctx.link().clone();
             move |message: BackendMessage| {
-                log::info!("Got message from backend: {:?}", message);
                 link.send_message(message);
             }
         };
@@ -52,7 +51,6 @@ impl Component for Counter {
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
             WebsocketMessages::Frontend(msg) => {
-                log::info!("Sending message to backend: {:?}", msg);
                 match msg {
                     FrontendMessage::StartCounter => {
                         self.counting = true;
@@ -66,7 +64,6 @@ impl Component for Counter {
                 self.websocket.send(msg.into())
             }
             WebsocketMessages::Backend(msg) => {
-                log::info!("Got message from backend: {:?}", msg);
                 self.message = Some(msg);
             }
         }

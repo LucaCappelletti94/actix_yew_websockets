@@ -39,18 +39,18 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WebSocket {
 
                                 act.counter += 1;
 
-                                ctx.text(BackendMessage::CurrentCount(act.counter))
+                                ctx.binary(BackendMessage::CurrentCount(act.counter))
                             }));
                     }
                     FrontendMessage::StopCounter => {
                         self.counting = false;
                         self.counting_handler.take().map(|h| ctx.cancel_future(h));
-                        ctx.text(BackendMessage::StoppedCounter);
+                        ctx.binary(BackendMessage::StoppedCounter);
                     }
                     FrontendMessage::Connect => {
                         unreachable!("Connect message should not be sent from the frontend");
                     }
-                    FrontendMessage::Disconnect(code) => {
+                    FrontendMessage::Close(code) => {
                         ctx.stop();
                     }
                 }

@@ -43,7 +43,6 @@ impl Worker for WebsocketWorker {
                 while let Some(backend_message) = read.next().await {
                     match backend_message {
                         Ok(message) => {
-                            log::debug!("Got message from websocket: {:?}", message);
                             scope.send_message(InternalMessage::Backend(message.into()));
                         }
                         Err(err) => {
@@ -68,18 +67,7 @@ impl Worker for WebsocketWorker {
     ) {
         match internal_message {
             InternalMessage::Backend(backend_message) => {
-                log::debug!("Got message from websocket: {:?}", backend_message);
-                // We log the current number of subscribers
-                log::debug!(
-                    "Current number of subscribers: {:?}",
-                    self.subscribers.len()
-                );
                 for sub in &self.subscribers {
-                    log::debug!(
-                        "Sending message to subscriber {:?}: {:?}",
-                        sub,
-                        backend_message
-                    );
                     scope.respond(*sub, backend_message.clone());
                 }
             }
@@ -121,11 +109,8 @@ impl Worker for WebsocketWorker {
         id: HandlerId,
     ) {
         if let Some(sender) = &mut self.sender {
-            log::debug!("Sending message to websocket: {:?}", frontend_message);
             match sender.try_send(frontend_message) {
-                Ok(()) => {
-                    log::debug!("Sent message to websocket");
-                }
+                Ok(()) => {}
                 Err(err) => {
                     log::error!("Error sending message to websocket: {:?}", err);
                 }

@@ -5,8 +5,6 @@ edition = "2021"
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-
 
 # We need to be able to implement the From trait for types defined in third
 # party crates that are used in the backend and frontend. In order to do so,
@@ -14,17 +12,18 @@ serde_json = "1.0"
 # From trait for types defined in third party crates respectively in the
 # backend and frontend. The features are called `backend` and `frontend`.
 
-actix-web-actors = { version = "4.0", optional = true }
+actix-web-actors = { version = "4.3.0", optional = true }
 actix-web = { version = "4.0", optional = true }
 
 gloo-net = {version="0.5.0", features=["websocket"], optional = true}
-bytestring = "1.3.1"
 log = "0.4.21"
+bincode = "1.3.3"
+bytes = {version="1.5.0", optional = true}
 
 [features]
 # The `backend` feature is used to enable the implementation of the From trait
 # for types defined in third party crates in the backend.
-backend = ["actix-web-actors", "actix-web"]
+backend = [ "actix-web", "actix-web-actors", "bytes" ]
 
 # The `frontend` feature is used to enable the implementation of the From trait
 # for types defined in third party crates in the frontend.
