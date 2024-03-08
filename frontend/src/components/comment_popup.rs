@@ -3,8 +3,7 @@ use commons::{
     comments::Comment,
     messages::{BackendMessage, FrontendMessage},
 };
-use gloo::console::{self, Timer};
-use gloo::timers::callback::{Interval, Timeout};
+use gloo::timers::callback::Timeout;
 use yew::prelude::*;
 use yew_agent::prelude::*;
 
@@ -20,7 +19,7 @@ pub enum WebsocketMessages {
     Frontend(FrontendMessage),
     Backend(BackendMessage),
     CloseCommentPopup,
-    RemoveComment
+    RemoveComment,
 }
 
 impl Component for CommentPopup {
@@ -86,7 +85,6 @@ impl Component for CommentPopup {
             .callback(|_| WebsocketMessages::CloseCommentPopup);
 
         if let Some(comment) = &self.comment {
-
             let classes = if self.hiding.is_some() {
                 "comment-popup hiding"
             } else {

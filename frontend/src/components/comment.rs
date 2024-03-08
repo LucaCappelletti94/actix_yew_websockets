@@ -2,15 +2,18 @@ use crate::worker::*;
 use commons::messages::{BackendMessage, FrontendMessage};
 use yew::prelude::*;
 use yew_agent::prelude::*;
+use gloo::timers::callback::Timeout;
 
 pub struct Comment {
     websocket: WorkerBridgeHandle<WebsocketWorker<FrontendMessage, BackendMessage>>,
+    deleting: Option<Timeout>
 }
 
 #[derive(Debug, Clone)]
 pub enum WebsocketMessages {
     Frontend(FrontendMessage),
     Backend(BackendMessage),
+    StartDeleteComment(commons::comments::Comment),
     DeleteComment(commons::comments::Comment),
 }
 
@@ -32,14 +35,24 @@ impl Component for Comment {
                     link.send_message(WebsocketMessages::Backend(message));
                 }
             })),
+            deleting: None
         }
     }
 
-    fn update(&mut self, _ctx: &Context<Self>, msg: Self::Message) -> bool {
+    fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
             WebsocketMessages::Frontend(fm) => self.websocket.send(fm.into()),
             WebsocketMessages::Backend(_bm) => {}
+            WebsocketMessages::StartDeleteComment(comment) => {
+                let link = ctx.link().clone();
+                self.deleting = Some(Timeout::new(1000, move || {
+                    link.send_message(WebsocketMessages::DeleteComment(comment));
+                }));
+            }
             WebsocketMessages::DeleteComment(comment) => {
+                if let Some(timeout) = self.deleting.take() {
+                    timeout.cancel();
+                }
                 self.websocket.send(FrontendMessage::DeleteComment(comment));
             }
         }
@@ -52,7 +65,7 @@ impl Component for Comment {
             let comment = ctx.props().comment.clone();
             let on_delete_button = ctx.link().callback(move |event: SubmitEvent| {
                 event.prevent_default();
-                WebsocketMessages::DeleteComment(comment.clone())
+                WebsocketMessages::StartDeleteComment(comment.clone())
             });
             html! {
                 <form method="DELETE" onsubmit={on_delete_button}>
@@ -63,8 +76,14 @@ impl Component for Comment {
             html! {}
         };
 
+        let classes = if self.deleting.is_some() {
+            "comment deleting"
+        } else {
+            "comment"
+        };
+
         html! {
-            <li class="comment">
+            <li class={classes}>
                 <p>{&ctx.props().comment.body}</p>
                 {delete_button}
             </li>
