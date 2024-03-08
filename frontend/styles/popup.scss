@@ -1,0 +1,52 @@
+.comment-popup {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    width: 300px;
+    background-color: white;
+    border-radius: 5px;
+    border: 1px solid $green;
+    animation: slide-in 1s ease;
+    padding: 10px;
+    box-sizing: border-box;
+
+    h4 {
+        border-bottom: 1px solid $green;
+        margin-bottom: 0.4em;
+        font-size: 1em;
+    }
+
+    span.close {
+        position: absolute;
+        top: 5px;
+        right: 5px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        color: $grey;
+        &:hover {
+            color: $red;
+        }
+    }
+
+    &.hiding {
+        animation: slide-out 1s ease;
+    }
+}
+
+@keyframes slide-in {
+    from {
+        right: -300px;
+    }
+    to {
+        right: 10px;
+    }
+}
+
+@keyframes slide-out {
+    from {
+        right: 10px;
+    }
+    to {
+        right: -300px;
+    }
+}

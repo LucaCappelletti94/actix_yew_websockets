@@ -17,11 +17,9 @@ pub fn login() -> Html {
     }
 
     html! {
-        <div class="fullscreen_center_app">
-            <div class="login_box">
-                <h2>{"Login"}</h2>
-                <LoginForm />
-            </div>
+        <div class="login_box">
+            <h2>{"Login"}</h2>
+            <LoginForm />
         </div>
     }
 }

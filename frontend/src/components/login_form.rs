@@ -76,7 +76,7 @@ impl Component for LoginForm {
         });
 
         html! {
-            <form onsubmit={on_submit}>
+            <form method="POST" onsubmit={on_submit}>
                 <input type="text" placeholder="Username" />
                 <button>{"Login"}</button>
             </form>

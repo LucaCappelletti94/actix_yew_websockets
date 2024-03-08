@@ -10,7 +10,7 @@ use yew_router::prelude::*;
 pub fn App() -> Html {
     html! {
         <BrowserRouter>
-            <div class="app">
+            <div class="fullscreen_center_app">
                 <WorkerProvider<WebsocketWorker<FrontendMessage, BackendMessage>> path="web_socket_worker.js">
                 <Switch<AppRoute> render={switch} />
             </WorkerProvider<WebsocketWorker<FrontendMessage, BackendMessage>>>

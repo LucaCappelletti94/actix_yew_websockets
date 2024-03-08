@@ -68,7 +68,7 @@ impl Component for CommentsDashboard {
                 .elements()
                 .named_item("comment")
                 .unwrap()
-                .dyn_into::<web_sys::HtmlTextAreaElement>()
+                .dyn_into::<web_sys::HtmlInputElement>()
                 .unwrap()
                 .value();
             WebsocketMessages::Frontend(FrontendMessage::InsertComment((user.clone(), comment)))
@@ -87,9 +87,9 @@ impl Component for CommentsDashboard {
         html! {
             <div class="comments-dashboard">
                 <CommentPopup/>
-                <form onsubmit={on_submit_comment}>
-                    <textarea name="comment" placeholder="Write a comment..." required=true />
-                    <button type="submit">{"Submit"}</button>
+                <form method="POST" onsubmit={on_submit_comment}>
+                    <input name="comment" placeholder="Write a comment..." required=true />
+                    <button type="submit">{"Post comment"}</button>
                 </form>
                 <ul class="comments">
                     {comments}
