@@ -1,6 +1,8 @@
 use futures::{SinkExt, StreamExt};
+use gloo::timers::callback::Timeout;
 use gloo_net::websocket::futures::WebSocket;
 use std::collections::HashSet;
+use std::fmt::Debug;
 use wasm_bindgen::UnwrapThrowExt;
 use yew::platform::spawn_local;
 use yew_agent::worker::HandlerId;
@@ -12,6 +14,7 @@ const NOMINAL_CLOSURE_CODE: u16 = 1000;
 pub struct WebsocketWorker<FM, BM> {
     subscribers: HashSet<HandlerId>,
     sender: Option<futures::channel::mpsc::Sender<FM>>,
+    reconnection_attempt: u32,
     _phantom: std::marker::PhantomData<BM>,
 }
 
@@ -19,26 +22,42 @@ pub struct WebsocketWorker<FM, BM> {
 pub enum InternalMessage<BM> {
     Backend(BM),
     Disconnect(Option<u16>),
+    Reconnect,
 }
 
-impl<FM, BM> Worker for WebsocketWorker<FM, BM>
+impl<FM, BM> WebsocketWorker<FM, BM>
 where
-    FM: Into<gloo_net::websocket::Message> + Clone + 'static,
-    BM: From<gloo_net::websocket::Message> + Clone + 'static,
+    FM: Into<gloo_net::websocket::Message> + Clone + 'static + Debug,
+    BM: From<gloo_net::websocket::Message> + Clone + 'static + Debug,
 {
-    type Message = InternalMessage<BM>;
-    type Input = FM;
-    type Output = BM;
+    fn connect(
+        scope: &yew_agent::prelude::WorkerScope<Self>,
+    ) -> Result<futures::channel::mpsc::Sender<FM>, String> {
+        let websocket = WebSocket::open("ws://localhost:8080/ws").map_err(|err| {
+            format!(
+                "Error opening websocket connection to ws://localhost:8080/ws: {:?}",
+                err
+            )
+        })?;
 
-    fn create(scope: &yew_agent::prelude::WorkerScope<Self>) -> Self {
-        let websocket = WebSocket::open("ws://localhost:8080/ws").unwrap_throw();
+        match websocket.state() {
+            gloo_net::websocket::State::Open => {},
+            gloo_net::websocket::State::Connecting => {},
+            _ => {
+                return Err("Websocket connection is not open".to_string());
+            }
+        }
+
         let (mut write, mut read) = websocket.split();
 
         let (sender, mut receiver) = futures::channel::mpsc::channel::<FM>(1000);
 
         spawn_local(async move {
             while let Some(frontend_message) = receiver.next().await {
-                write.send(frontend_message.into()).await.unwrap();
+                if write.send(frontend_message.into()).await.is_err() {
+                    log::error!("Error sending to websocket");
+                    break;
+                }
             }
         });
 
@@ -52,16 +71,37 @@ where
                         }
                         Err(err) => {
                             log::error!("Error reading from websocket: {:?}", err);
+                            break;
                         }
                     }
                 }
-                log::debug!("WebSocket Closed");
+                scope.send_message(InternalMessage::Reconnect);
             });
         }
 
+        Ok(sender)
+    }
+}
+
+impl<FM, BM> Worker for WebsocketWorker<FM, BM>
+where
+    FM: Into<gloo_net::websocket::Message> + Clone + 'static + Debug,
+    BM: From<gloo_net::websocket::Message> + Clone + 'static + Debug,
+{
+    type Message = InternalMessage<BM>;
+    type Input = FM;
+    type Output = BM;
+
+    fn create(scope: &yew_agent::prelude::WorkerScope<Self>) -> Self {
+        let scope = scope.clone();
+        Timeout::new(500, move || {
+            scope.send_message(InternalMessage::Reconnect);
+        })
+        .forget();
         Self {
             subscribers: HashSet::new(),
-            sender: Some(sender),
+            sender: None,
+            reconnection_attempt: 0,
             _phantom: std::marker::PhantomData,
         }
     }
@@ -73,6 +113,7 @@ where
     ) {
         match internal_message {
             InternalMessage::Backend(backend_message) => {
+                log::debug!("Received message from websocket: {:?}", backend_message);
                 for sub in &self.subscribers {
                     scope.respond(*sub, backend_message.clone());
                 }
@@ -82,6 +123,26 @@ where
                     spawn_local(async move {
                         sender.close().await.unwrap_throw();
                     });
+                }
+            }
+            InternalMessage::Reconnect => {
+                if let Some(mut sender) = self.sender.take() {
+                    spawn_local(async move {
+                        sender.close().await.unwrap_throw();
+                    });
+                }
+                if let Ok(sender) = Self::connect(scope) {
+                    log::debug!("Reconnected to websocket");
+                    self.reconnection_attempt = 0;
+                    self.sender = Some(sender);
+                } else {
+                    log::debug!("Failed to reconnect to websocket, attempting again in {} seconds", self.reconnection_attempt);
+                    self.reconnection_attempt += 1;
+                    let scope = scope.clone();
+                    Timeout::new(self.reconnection_attempt * 1000, move || {
+                        scope.send_message(InternalMessage::Reconnect);
+                    })
+                    .forget();
                 }
             }
         }

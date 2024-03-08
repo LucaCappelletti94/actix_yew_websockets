@@ -1,4 +1,7 @@
 //! Websocket backend
+use std::collections::HashMap;
+use std::collections::HashSet;
+
 use actix::ActorContext;
 use actix::AsyncContext;
 use actix::SpawnHandle;
@@ -12,7 +15,7 @@ use crate::channel_listeners::*;
 use crate::DieselConn;
 
 pub struct WebSocket {
-    pg_handlers: Vec<SpawnHandle>,
+    pg_handlers: HashMap<String, SpawnHandle>,
     diesel: DieselConn,
     sqlx: SQLxPool<Postgres>,
 }
@@ -20,7 +23,7 @@ pub struct WebSocket {
 impl WebSocket {
     pub fn new(diesel: DieselConn, sqlx: SQLxPool<Postgres>) -> Self {
         Self {
-            pg_handlers: vec![],
+            pg_handlers: HashMap::new(),
             diesel,
             sqlx,
         }
@@ -41,6 +44,46 @@ impl actix::Handler<BackendMessage> for WebSocket {
 
 impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WebSocket {
     fn handle(&mut self, msg: Result<ws::Message, ws::ProtocolError>, ctx: &mut Self::Context) {
+        {
+            let recipient = ctx.address();
+            let sqlx = self.sqlx.clone();
+
+            if !self.pg_handlers.contains_key(&CommentsChannel.to_string()) {
+                self.pg_handlers.insert(
+                    CommentsChannel.to_string(),
+                    ctx.spawn(
+                        async move {
+                            let _ = start_listening(
+                                &sqlx,
+                                CommentsChannel,
+                                |payload: CommentsPayload| {
+                                    match payload.action_type {
+                                        ActionType::INSERT => {
+                                            recipient.do_send(BackendMessage::NewComment(
+                                                payload.into(),
+                                            ));
+                                        }
+                                        ActionType::UPDATE => {
+                                            recipient.do_send(BackendMessage::UpdatedComment(
+                                                payload.into(),
+                                            ));
+                                        }
+                                        ActionType::DELETE => {
+                                            recipient.do_send(BackendMessage::DeletedComment(
+                                                payload.into(),
+                                            ));
+                                        }
+                                    };
+                                },
+                            )
+                            .await;
+                        }
+                        .into_actor(self),
+                    ),
+                );
+            }
+        }
+
         match msg {
             Ok(msg) => {
                 log::info!("Got message from WebSocket: {:?}", msg);
@@ -58,70 +101,35 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WebSocket {
 
                                 let recipient = ctx.address();
                                 let sqlx = self.sqlx.clone();
-                                self.pg_handlers.push(
-                                    ctx.spawn(
-                                        async move {
-                                            let _ = start_listening(
-                                                &sqlx,
-                                                CommentsChannel,
-                                                |payload: CommentsPayload| {
-                                                    match payload.action_type {
-                                                        ActionType::INSERT => {
-                                                            recipient.do_send(
-                                                                BackendMessage::NewComment(
-                                                                    payload.into(),
-                                                                ),
-                                                            );
-                                                        }
-                                                        ActionType::UPDATE => {
-                                                            recipient.do_send(
-                                                                BackendMessage::UpdatedComment(
-                                                                    payload.into(),
-                                                                ),
-                                                            );
-                                                        }
-                                                        ActionType::DELETE => {
-                                                            recipient.do_send(
-                                                                BackendMessage::DeletedComment(
-                                                                    payload.into(),
-                                                                ),
-                                                            );
-                                                        }
-                                                    };
-                                                },
-                                            )
-                                            .await;
-                                        }
-                                        .into_actor(self),
-                                    ),
-                                );
-
-                                let recipient = ctx.address();
-                                let sqlx = self.sqlx.clone();
-                                self.pg_handlers.push(
-                                    ctx.spawn(
-                                        async move {
-                                            let _ = start_listening(
-                                                &sqlx,
-                                                CommentsUserChannel::new(user.into()),
-                                                |payload: CommentsPayload| {
-                                                    match payload.action_type {
-                                                        ActionType::INSERT => {
-                                                            recipient.do_send(
-                                                                BackendMessage::InsertedComment(
-                                                                    payload.into(),
-                                                                ),
-                                                            );
-                                                        }
-                                                        _ => {}
-                                                    };
-                                                },
-                                            )
-                                            .await;
-                                        }
-                                        .into_actor(self),
-                                    ),
-                                );
+                                if !self.pg_handlers.contains_key(
+                                    &CommentsUserChannel::new(user.clone().into()).to_string(),
+                                ) {
+                                    self.pg_handlers.insert(
+                                        CommentsUserChannel::new(user.clone().into()).to_string(),
+                                        ctx.spawn(
+                                            async move {
+                                                let _ = start_listening(
+                                                    &sqlx,
+                                                    CommentsUserChannel::new(user.into()),
+                                                    |payload: CommentsPayload| {
+                                                        match payload.action_type {
+                                                            ActionType::INSERT => {
+                                                                recipient.do_send(
+                                                                    BackendMessage::InsertedComment(
+                                                                        payload.into(),
+                                                                    ),
+                                                                );
+                                                            }
+                                                            _ => {}
+                                                        };
+                                                    },
+                                                )
+                                                .await;
+                                            }
+                                            .into_actor(self),
+                                        ),
+                                    );
+                                }
                             }
                             Err(err) => {
                                 log::error!("Error inserting user: {:?}", err);
