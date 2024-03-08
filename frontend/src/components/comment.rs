@@ -50,11 +50,14 @@ impl Component for Comment {
         // If the user is the author of the comment, they can delete it
         let delete_button = if ctx.props().comment.user_id == ctx.props().user.id {
             let comment = ctx.props().comment.clone();
-            let on_delete_button = ctx
-                .link()
-                .callback(move |_| WebsocketMessages::DeleteComment(comment.clone()));
+            let on_delete_button = ctx.link().callback(move |event: SubmitEvent| {
+                event.prevent_default();
+                WebsocketMessages::DeleteComment(comment.clone())
+            });
             html! {
-                <button onclick={on_delete_button}>{"Delete"}</button>
+                <form method="DELETE" onsubmit={on_delete_button}>
+                    <button type="submit">{"Delete"}</button>
+                </form>
             }
         } else {
             html! {}

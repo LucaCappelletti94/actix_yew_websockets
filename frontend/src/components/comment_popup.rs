@@ -49,6 +49,12 @@ impl Component for CommentPopup {
                     log::info!("Inserted comment: {:?}", comment);
                     self.comment = Some(comment);
                     let link = ctx.link().clone();
+                    if let Some(timeout) = self.before_hiding.take() {
+                        timeout.cancel();
+                    }
+                    if let Some(timeout) = self.hiding.take() {
+                        timeout.cancel();
+                    }
                     self.before_hiding = Some(Timeout::new(5000, move || {
                         link.send_message(WebsocketMessages::CloseCommentPopup);
                     }));

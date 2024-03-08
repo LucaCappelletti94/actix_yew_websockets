@@ -32,3 +32,15 @@ form[method="POST"] {
         }
     }
 }
+
+form[method="DELETE"] {
+    button {
+        border-color: $red;
+        color: $red;
+        transition: all 0.3s ease;
+        &:hover {
+            background-color: $red;
+            color: white;
+        }
+    }
+}
