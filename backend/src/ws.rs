@@ -6,26 +6,37 @@ use actix::WrapFuture;
 use actix::{Actor, StreamHandler};
 use actix_web_actors::ws;
 use commons::messages::{BackendMessage, FrontendMessage};
-use std::time::Duration;
+use sqlx::{Pool as SQLxPool, Postgres};
 
-use crate::Conn;
+use crate::channel_listeners::*;
+use crate::DieselConn;
 
 pub struct WebSocket {
     pg_handlers: Vec<SpawnHandle>,
-    conn: Conn,
+    diesel: DieselConn,
+    sqlx: SQLxPool<Postgres>,
 }
 
 impl WebSocket {
-    pub fn new(conn: Conn) -> Self {
+    pub fn new(diesel: DieselConn, sqlx: SQLxPool<Postgres>) -> Self {
         Self {
             pg_handlers: vec![],
-            conn,
+            diesel,
+            sqlx,
         }
     }
 }
 
 impl Actor for WebSocket {
     type Context = ws::WebsocketContext<Self>;
+}
+
+impl actix::Handler<BackendMessage> for WebSocket {
+    type Result = ();
+
+    fn handle(&mut self, msg: BackendMessage, ctx: &mut Self::Context) {
+        ctx.binary(msg);
+    }
 }
 
 impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WebSocket {
@@ -41,23 +52,81 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WebSocket {
                             username: username.clone(),
                         };
 
-                        match new_user.insert(&mut self.conn) {
+                        match new_user.insert_or_get(&mut self.diesel) {
                             Ok(user) => {
-                                ctx.binary(BackendMessage::LoggedIn(user.into()));
+                                ctx.binary(BackendMessage::LoggedIn(user.clone().into()));
+
+                                let recipient = ctx.address();
+                                let sqlx = self.sqlx.clone();
+                                self.pg_handlers.push(
+                                    ctx.spawn(
+                                        async move {
+                                            let _ = start_listening(
+                                                &sqlx,
+                                                CommentsChannel,
+                                                |payload: CommentsPayload| {
+                                                    match payload.action_type {
+                                                        ActionType::INSERT => {
+                                                            recipient.do_send(
+                                                                BackendMessage::NewComment(
+                                                                    payload.into(),
+                                                                ),
+                                                            );
+                                                        }
+                                                        ActionType::UPDATE => {
+                                                            recipient.do_send(
+                                                                BackendMessage::UpdatedComment(
+                                                                    payload.into(),
+                                                                ),
+                                                            );
+                                                        }
+                                                        ActionType::DELETE => {
+                                                            recipient.do_send(
+                                                                BackendMessage::DeletedComment(
+                                                                    payload.into(),
+                                                                ),
+                                                            );
+                                                        }
+                                                    };
+                                                },
+                                            )
+                                            .await;
+                                        }
+                                        .into_actor(self),
+                                    ),
+                                );
+
+                                let recipient = ctx.address();
+                                let sqlx = self.sqlx.clone();
+                                self.pg_handlers.push(
+                                    ctx.spawn(
+                                        async move {
+                                            let _ = start_listening(
+                                                &sqlx,
+                                                CommentsUserChannel::new(user.into()),
+                                                |payload: CommentsPayload| {
+                                                    match payload.action_type {
+                                                        ActionType::INSERT => {
+                                                            recipient.do_send(
+                                                                BackendMessage::InsertedComment(
+                                                                    payload.into(),
+                                                                ),
+                                                            );
+                                                        }
+                                                        _ => {}
+                                                    };
+                                                },
+                                            )
+                                            .await;
+                                        }
+                                        .into_actor(self),
+                                    ),
+                                );
                             }
                             Err(err) => {
                                 log::error!("Error inserting user: {:?}", err);
                             }
-                        }
-
-                        self.pg_handlers
-                            .push(ctx.spawn(async move {
-                                // We check whether there are any news from
-                                // the postgres channel "comment_added"
-                                
-                                todo!("Check for new comments");
-
-                            }.into_actor(self)));
+                        };
                     }
                     FrontendMessage::InsertComment((user, comment_text)) => {
                         let new_comment = crate::models::NewComment {
@@ -65,10 +134,8 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WebSocket {
                             body: comment_text,
                         };
 
-                        match new_comment.insert(&mut self.conn) {
-                            Ok(comment) => {
-                                ctx.binary(BackendMessage::NewComment(comment.into()));
-                            }
+                        match new_comment.insert(&mut self.diesel) {
+                            Ok(_) => {}
                             Err(err) => {
                                 log::error!("Error inserting comment: {:?}", err);
                             }
@@ -76,7 +143,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WebSocket {
                     }
                     FrontendMessage::DeleteComment(comment) => {
                         let comment: crate::models::Comment = comment.into();
-                        match comment.delete(&mut self.conn) {
+                        match comment.delete(&mut self.diesel) {
                             Ok(_) => {
                                 // We could trigger the event here,
                                 // but we want to handle it separately in the

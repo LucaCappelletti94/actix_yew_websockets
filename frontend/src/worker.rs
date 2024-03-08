@@ -110,9 +110,9 @@ where
 
     fn received(
         &mut self,
-        scope: &yew_agent::prelude::WorkerScope<Self>,
+        _scope: &yew_agent::prelude::WorkerScope<Self>,
         frontend_message: Self::Input,
-        id: HandlerId,
+        _id: HandlerId,
     ) {
         if let Some(sender) = &mut self.sender {
             match sender.try_send(frontend_message) {

@@ -29,7 +29,7 @@ impl Comment {
     }
 }
 
-#[derive(Queryable, Debug)]
+#[derive(Queryable, Debug, Clone)]
 #[diesel(table_name = users)]
 pub struct User {
     pub id: i32,
@@ -96,5 +96,13 @@ impl NewUser {
         diesel::insert_into(users)
             .values(self)
             .get_result::<User>(conn)
+    }
+
+    pub fn insert_or_get(&self, conn: &mut PgConnection) -> QueryResult<User> {
+        use crate::schema::users::dsl::*;
+        match users.filter(username.eq(&self.username)).first::<User>(conn) {
+            Ok(user) => Ok(user),
+            Err(_) => self.insert(conn),
+        }
     }
 }

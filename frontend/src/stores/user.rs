@@ -17,4 +17,8 @@ impl UserState {
     pub fn is_not_logged_in(&self) -> bool {
         self.user.is_none()
     }
+
+    pub fn get_user(&self) -> Option<User> {
+        self.user.clone()
+    }
 }

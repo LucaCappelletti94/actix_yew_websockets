@@ -10,3 +10,5 @@ pub mod comment_popup;
 pub use comment_popup::CommentPopup;
 pub mod comment;
 pub use comment::Comment;
+pub mod comments_dashboard;
+pub use comments_dashboard::CommentsDashboard;

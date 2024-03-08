@@ -21,9 +21,15 @@ pub enum FrontendMessage {
 pub enum BackendMessage {
     LoggedIn(User),
     NewComment(Comment),
+    UpdatedComment(Comment),
     InsertedComment(Comment),
     Comments(Vec<Comment>),
     DeletedComment(Comment),
+}
+
+#[cfg(feature = "backend")]
+impl actix::Message for BackendMessage {
+    type Result = ();
 }
 
 #[cfg(feature = "backend")]

@@ -13,7 +13,7 @@ pub fn login() -> Html {
     let (user, _dispatch) = use_store::<UserState>();
 
     if user.is_logged_in() {
-        navigator.push(&AppRoute::Login);
+        navigator.push(&AppRoute::Comments);
     }
 
     html! {
